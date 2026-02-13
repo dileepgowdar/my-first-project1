@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tracking Dashboard</title>
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"/>
+  <style>
+    body { margin: 0; font-family: sans-serif; display: flex; height: 100vh; }
+    #sidebar { width: 250px; padding: 10px; background: #f4f4f4; overflow-y: auto; }
+    #map { height: 100%; flex-grow: 1; }
+    .card { background: #fff; padding: 10px; border-radius: 6px; margin-bottom: 10px; text-align: center; font-weight: bold; }
+    .card.total { background: #007bff; color: #fff; }
+    .card.nearby { background: #28a745; color: #fff; }
+    .card.delayed { background: #dc3545; color: #fff; }
+    canvas { max-width: 100%; margin-top: 10px; }
+    .vehicle-btn { display: block; margin: 5px 0; padding: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <div class="card total">Total: <span id="totalCount">0</span></div>
+    <div class="card nearby">Nearby (&lt;2min): <span id="nearCount">0</span></div>
+    <div class="card delayed">Delayed (&gt;15min): <span id="alertCount">0</span></div>
+    <input type="text" id="searchBox" placeholder="Search vehicle..." style="width:100%; margin-top:5px; padding:5px; border-radius:4px; border:1px solid #ccc;" onkeydown="if(event.key === 'Enter') searchVehicle()">
+    <canvas id="etaChart" height="150"></canvas>
+    <div style="margin-top:10px;">
+      <label><b>Assign Destination:</b></label><br>
+      <select id="destinationSelect" style="width:100%; margin-top:4px;"></select>
+      <button onclick="enableDestinationMode()" style="margin-top:4px; width:100%;">Click Map to Set</button>
+    </div>
+    <div style="margin-top:10px;">
+      <label><b>Export Trip CSV:</b></label><br>
+      <select id="exportSelect" style="width:100%; margin-top:4px;"></select>
+      <button onclick="exportCSV()" style="margin-top:4px; width:100%;">Export CSV</button>
+    </div>
+    <hr>
+    <div id="vehicleList"></div>
+  </div>
+  <div id="map"></div>
+<script>
+  const role = "{{ role }}";
+  const username = "{{ username }}";
+  const map = L.map('map').setView([12.97, 77.59], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+  const markers = {};
+  const polylines = {};
+  const pickupMarkers = {};
+  const dropMarkers = {};
+  const renderedVehicles = new Set();
+  const chart = new Chart(document.getElementById("etaChart"), {
+    type: 'bar',
+    data: { labels: [], datasets: [{ label: 'ETA (minutes)', data: [], backgroundColor: '#007bff' }] },
+    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+  });
+
+  function updateDashboard(vehicles) {
+    let near = 0, delayed = 0;
+    chart.data.labels = [];
+    chart.data.datasets[0].data = [];
+
+    vehicles.forEach(v => {
+      const eta = v.eta_minutes;
+      if (eta < 2) near++;
+      if (eta > 15) delayed++;
+      chart.data.labels.push(v.vehicle_id);
+      chart.data.datasets[0].data.push(eta);
+    });
+
+    chart.update();
+    document.getElementById("totalCount").innerText = vehicles.length;
+    document.getElementById("nearCount").innerText = near;
+    document.getElementById("alertCount").innerText = delayed;
+  }
+
+  function searchVehicle() {
+    const query = document.getElementById("searchBox").value.toUpperCase();
+    if (markers[query]) {
+      map.setView(markers[query].getLatLng(), 15);
+      markers[query].openPopup();
+    } else {
+      alert("Vehicle not found.");
+    }
+  }
+
+  let destMode = false;
+  let selectedVehicle = null;
+
+  function enableDestinationMode() {
+    selectedVehicle = document.getElementById("destinationSelect").value;
+    destMode = true;
+    alert("Click map to assign destination to " + selectedVehicle);
+  }
+
+  function exportCSV() {
+    const v = document.getElementById("exportSelect").value;
+    window.open("http://127.0.0.1:5000/export_csv/" + v, "_blank");
+  }
+
+  map.on('click', function(e) {
+    if (destMode && selectedVehicle) {
+      destMode = false;
+      fetch("http://127.0.0.1:5000/set_destination", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vehicle_id: selectedVehicle,
+          latitude: e.latlng.lat,
+          longitude: e.latlng.lng
+        })
+      }).then(res => res.json())
+        .then(res => {
+          alert("Destination set for " + selectedVehicle);
+          setTimeout(updateVehicles, 1000);
+        });
+    }
+  });
+
+  function animateMarker(vehicleId, newLatLng) {
+  const marker = markers[vehicleId];
+  if (!marker) return;
+
+  const currentLatLng = marker.getLatLng();
+  const steps = 20;
+  let i = 0;
+
+  const latStep = (newLatLng[0] - currentLatLng.lat) / steps;
+  const lngStep = (newLatLng[1] - currentLatLng.lng) / steps;
+
+  const interval = setInterval(() => {
+    if (i >= steps) {
+      clearInterval(interval);
+      return;
+    }
+
+    const lat = currentLatLng.lat + latStep * i;
+    const lng = currentLatLng.lng + lngStep * i;
+    marker.setLatLng([lat, lng]);
+    i++;
+  }, 50); // controls the animation speed (1000ms / 20 steps = 50ms per step)
+}
+
+  function updateVehicles() {
+  fetch("http://127.0.0.1:5000/get_all_vehicles")
+    .then(res => res.json())
+    .then(data => {
+      const details = [];
+
+      data.forEach(v => {
+        fetch("http://127.0.0.1:5000/get_location/" + v.vehicle_id)
+          .then(res => res.json())
+          .then(info => {
+            const latlng = [info.latitude, info.longitude];
+            details.push(info);
+
+            // Create marker only if not already rendered
+            if (!renderedVehicles.has(info.vehicle_id)) {
+              renderedVehicles.add(info.vehicle_id);
+
+              markers[info.vehicle_id] = L.marker(latlng, {
+                icon: L.icon({
+                  iconUrl: "https://img.icons8.com/?size=100&id=15174&format=png&color=000000", // taxi icon
+                  iconSize: [40, 40],
+                  iconAnchor: [20, 20]
+                })
+              }).addTo(map);
+
+              const btn = document.createElement("button");
+              btn.className = "vehicle-btn";
+              btn.id = "btn-" + info.vehicle_id;
+              btn.innerText = info.vehicle_id;
+              btn.onclick = () => {
+                map.setView(latlng, 15);
+                markers[info.vehicle_id].openPopup();
+              };
+              document.getElementById("vehicleList").appendChild(btn);
+
+              const opt1 = document.createElement("option");
+              opt1.value = info.vehicle_id;
+              opt1.innerText = info.vehicle_id;
+              document.getElementById("destinationSelect").appendChild(opt1);
+
+              const opt2 = opt1.cloneNode(true);
+              document.getElementById("exportSelect").appendChild(opt2);
+            }
+
+            // Animate the marker movement
+            animateMarker(info.vehicle_id, latlng);
+
+            // Update popup content
+            markers[info.vehicle_id].bindPopup(
+              `<b>${info.vehicle_id}</b><br>ETA: ${info.eta_minutes} min<br>Distance: ${info.distance_km} km`
+            );
+
+            // Destination arrival alert
+            if (info.arrived && !markers[info.vehicle_id].arrivedNotified) {
+              alert("✅ " + info.vehicle_id + " has reached its destination!");
+              markers[info.vehicle_id].arrivedNotified = true;
+            }
+
+            // Draw route path
+            fetch("http://127.0.0.1:5000/get_history/" + info.vehicle_id)
+              .then(res => res.json())
+              .then(history => {
+                const path = history.map(p => [p.lat, p.lng]);
+                if (!polylines[info.vehicle_id]) {
+                  polylines[info.vehicle_id] = L.polyline(path, { color: "blue" }).addTo(map);
+                } else {
+                  polylines[info.vehicle_id].setLatLngs(path);
+                }
+              });
+
+            // Pickup/Drop markers and route
+            fetch("/get_booking_info/" + info.vehicle_id)
+              .then(res => res.json())
+              .then(data => {
+                if (!data.pickup || !data.drop) return;
+
+                // Remove old markers
+                if (pickupMarkers[info.vehicle_id]) map.removeLayer(pickupMarkers[info.vehicle_id]);
+                if (dropMarkers[info.vehicle_id]) map.removeLayer(dropMarkers[info.vehicle_id]);
+
+                pickupMarkers[info.vehicle_id] = L.marker([data.pickup.lat, data.pickup.lng], {
+                  icon: L.icon({
+                    iconUrl: "https://maps.google.com/mapfiles/ms/icons/green-dot.png",
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41]
+                  })
+                }).addTo(map).bindPopup("Pickup for " + info.vehicle_id);
+
+                dropMarkers[info.vehicle_id] = L.marker([data.drop.lat, data.drop.lng], {
+                  icon: L.icon({
+                    iconUrl: "https://maps.google.com/mapfiles/ms/icons/red-dot.png",
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41]
+                  })
+                }).addTo(map).bindPopup("Drop for " + info.vehicle_id);
+
+                // Draw route between pickup and drop
+                if (!polylines[info.vehicle_id]) {
+                  polylines[info.vehicle_id] = L.polyline(
+                    [
+                      [data.pickup.lat, data.pickup.lng],
+                      [data.drop.lat, data.drop.lng]
+                    ],
+                    { color: "purple" }
+                  ).addTo(map);
+                }
+              });
+
+            // Update dashboard only after all data fetched
+            if (details.length === data.length) {
+              updateDashboard(details);
+            }
+          });
+      });
+    });
+}
+  updateVehicles();
+  setInterval(updateVehicles, 5000);
+</script>
+</body>
+</html>

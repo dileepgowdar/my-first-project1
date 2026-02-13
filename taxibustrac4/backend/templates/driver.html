@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Driver Dashboard</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      background: linear-gradient(to bottom right, #e3f2fd, #ffffff);
+    }
+
+    #topbar {
+      padding: 15px;
+      background: #007bff;
+      color: white;
+      font-size: 18px;
+      font-weight: bold;
+      text-align: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    #statusBar {
+      background: #f8f9fa;
+      padding: 15px;
+      text-align: center;
+      border-bottom: 1px solid #ccc;
+    }
+
+    .btn {
+      padding: 10px 16px;
+      margin: 10px 10px 0 0;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background 0.3s ease, transform 0.2s ease;
+    }
+
+    .trip {
+      background: #17a2b8;
+      color: white;
+    }
+
+    .trip:hover {
+      background: #138496;
+      transform: scale(1.05);
+    }
+
+    #map {
+      height: 70vh;
+      width: 100%;
+    }
+
+    #profileBox, #passengerBox {
+      padding: 15px;
+      background: #ffffff;
+      border-top: 1px solid #ccc;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    h4 {
+      margin-top: 0;
+      color: #007bff;
+    }
+
+    #ridePrompt {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #fff3cd;
+      border: 1px solid #ffeeba;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 1000;
+    }
+
+    #ridePrompt button {
+      margin-top: 10px;
+      padding: 8px 14px;
+      border-radius: 6px;
+      border: none;
+      background: #28a745;
+      color: white;
+      font-weight: bold;
+      margin-right: 10px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    #ridePrompt button:last-child {
+      background: #dc3545;
+    }
+
+    #ridePrompt button:hover {
+      opacity: 0.9;
+    }
+  </style>
+</head>
+<body>
+  <div id="topbar">
+    Driver: <span id="driverName"></span> | Vehicle: <span id="vehicleID"></span>
+  </div>
+
+  <div id="statusBar">
+    Location: <span id="locationInfo">Loading...</span><br>
+    Status: <span id="statusDisplay">Not Set</span><br><br>
+    <button class="btn trip" onclick="startTrip()">Start Trip</button>
+    <button class="btn trip" onclick="endTrip()">End Trip</button>
+  </div>
+
+  <div id="profileBox">
+    <h4>Driver Profile</h4>
+    <p><b>Username:</b> <span id="profileName"></span></p>
+    <p><b>Vehicle ID:</b> <span id="profileVehicle"></span></p>
+  </div>
+
+  <div id="passengerBox">
+    <h4>Passenger Info</h4>
+    <p id="passengerInfo">No active booking</p>
+  </div>
+
+  <div id="map"></div>
+
+  <div id="ridePrompt" style="display:none;">
+    <p><b>New Ride Request!</b></p>
+    <button onclick="handleRideDecision(true)">Accept</button>
+    <button onclick="handleRideDecision(false)">Reject</button>
+  </div>
+
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const vehicleId = params.get("vehicle_id");
+  const driverName = params.get("driver") || "Unknown";
+
+  document.getElementById("driverName").innerText = driverName;
+  document.getElementById("vehicleID").innerText = vehicleId;
+  document.getElementById("profileName").innerText = driverName;
+  document.getElementById("profileVehicle").innerText = vehicleId;
+
+  const map = L.map('map').setView([12.97, 77.59], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+  const marker = L.marker([0, 0]).addTo(map);
+  let pickupMarker = null;
+  let dropMarker = null;
+
+  function startTrip() {
+    alert("✅ Trip started for vehicle " + vehicleId);
+    fetch("/start_trip", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vehicle_id: vehicleId })
+    }).then(res => res.json()).then(res => {
+      alert(res.message || "Trip started");
+      update();
+    });
+  }
+
+  function endTrip() {
+    alert("✅ Trip ended for vehicle " + vehicleId);
+    fetch("/end_trip", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vehicle_id: vehicleId })
+    }).then(res => res.json()).then(res => {
+      alert(res.message || "Trip ended");
+      update();
+    });
+  }
+
+  function handleRideDecision(accepted) {
+    document.getElementById("ridePrompt").style.display = "none";
+    const url = accepted ? "/accept_ride" : "/reject_ride";
+    fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vehicle_id: vehicleId })
+    }).then(() => {
+      alert(accepted ? "✅ Ride accepted. Head to pickup." : "❌ Ride rejected.");
+      update();
+    });
+  }
+
+  function update() {
+    fetch("/get_location/" + vehicleId)
+      .then(res => res.json())
+      .then(info => {
+        const latlng = [info.latitude, info.longitude];
+        marker.setLatLng(latlng);
+        marker.bindPopup(`<b>${vehicleId}</b><br>ETA: ${info.eta_minutes} min<br>Distance: ${info.distance_km} km<br>Status: ${info.status || "Unknown"}`).openPopup();
+        map.setView(latlng, 15);
+        document.getElementById("locationInfo").innerText = latlng[0].toFixed(4) + ", " + latlng[1].toFixed(4);
+        document.getElementById("statusDisplay").innerText = info.status || "Unknown";
+
+        if (info.waiting_for_user) {
+          fetch(`/get_booking_info/${vehicleId}`)
+            .then(res => res.json())
+            .then(data => {
+              fetch(`/estimate_fare?pickup=${data.pickup.lat},${data.pickup.lng}&drop=${data.drop.lat},${data.drop.lng}&vehicle_id=${vehicleId}`)
+                .then(res => res.json())
+                .then(fareData => {
+                  alert(`💰 Estimated Fare: ₹${fareData.fare}`);
+                  document.getElementById("ridePrompt").style.display = "block";
+                });
+            });
+        } else {
+          document.getElementById("ridePrompt").style.display = "none";
+        }
+
+        fetch("/get_passenger_for_vehicle/" + vehicleId)
+          .then(res => res.json())
+          .then(data => {
+            if (data.username) {
+              const passengerName = data.username;
+              fetch(`/get_booking_info/${vehicleId}`)
+                .then(res => res.json())
+                .then(info => {
+                  const pickupPlace = info.original_pickup || `${info.pickup.lat},${info.pickup.lng}`;
+                  const dropPlace = info.original_drop || `${info.drop.lat},${info.drop.lng}`;
+                  const fare = info.fare || "N/A";
+                  fetch(`/estimate_fare?pickup=${info.pickup.lat},${info.pickup.lng}&drop=${info.drop.lat},${info.drop.lng}&vehicle_id=${vehicleId}`)
+                    .then(res => res.json())
+                    .then(fareInfo => {
+                      const fare = fareInfo.fare !== "N/A" ? `₹${fareInfo.fare}` : "N/A";
+                      document.getElementById("passengerInfo").innerText =
+                        `Passenger: ${passengerName}\nFrom: ${pickupPlace}\nTo: ${dropPlace}\nFare: ${fare}`;
+                    });
+                });
+            } else {
+              document.getElementById("passengerInfo").innerText = "No active booking";
+            }
+          });
+      });
+
+    fetch("/get_booking_info/" + vehicleId)
+      .then(res => res.json())
+      .then(data => {
+        if (pickupMarker) map.removeLayer(pickupMarker);
+        if (dropMarker) map.removeLayer(dropMarker);
+
+        if (data.pickup) {
+          pickupMarker = L.marker([data.pickup.lat, data.pickup.lng], {
+            icon: L.icon({
+              iconUrl: "https://maps.google.com/mapfiles/ms/icons/green-dot.png",
+              iconSize: [25, 41], iconAnchor: [12, 41]
+            })
+          }).addTo(map).bindPopup("Pickup Point");
+        }
+
+        if (data.drop) {
+          dropMarker = L.marker([data.drop.lat, data.drop.lng], {
+            icon: L.icon({
+              iconUrl: "https://maps.google.com/mapfiles/ms/icons/red-dot.png",
+              iconSize: [25, 41], iconAnchor: [12, 41]
+            })
+          }).addTo(map).bindPopup("Drop Point");
+        }
+      });
+  }
+
+  update();
+  setInterval(update, 5000);
+</script>
+</body>
+</html>

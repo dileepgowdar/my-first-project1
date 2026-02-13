@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Register - Vehicle Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(to right, #667eea, #764ba2);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: white;
+    }
+
+    .register-box {
+      background: white;
+      color: #333;
+      padding: 30px 40px;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      width: 400px;
+      animation: fadeIn 1s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #4a4a4a;
+    }
+
+    .input-group {
+      position: relative;
+      margin: 20px 0;
+    }
+
+    .input-group input,
+    .input-group select {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 16px;
+      outline: none;
+    }
+
+    .input-group label {
+      position: absolute;
+      top: -10px;
+      left: 12px;
+      background: white;
+      padding: 0 6px;
+      font-size: 14px;
+      color: #666;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 20px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: bold;
+      font-size: 16px;
+      transition: background 0.3s ease;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #0056b3;
+    }
+
+    .login-link {
+      text-align: center;
+      margin-top: 15px;
+      font-size: 14px;
+    }
+
+    .login-link a {
+      color: #007bff;
+      text-decoration: none;
+    }
+
+    .login-link a:hover {
+      text-decoration: underline;
+    }
+
+    #vehicle-id-container {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="register-box">
+    <h2>Register</h2>
+    <form action="/register" method="POST">
+      <div class="input-group">
+        <label for="username">Username</label>
+        <input type="text" name="username" id="username" required />
+      </div>
+
+      <div class="input-group">
+        <label for="password">Password</label>
+        <input type="password" name="password" id="password" required />
+      </div>
+
+      <div class="input-group">
+        <label for="age">Age</label>
+        <input type="number" name="age" id="age" required min="18" max="100" />
+      </div>
+
+      <div class="input-group">
+        <label for="phone">Phone Number</label>
+        <input type="tel" name="phone" id="phone" pattern="[0-9]{10}" maxlength="10" required placeholder="10-digit mobile number" />
+      </div>
+
+      <div class="input-group">
+        <label for="role">Select Role</label>
+        <select name="role" id="roleSelect" required>
+          <option value="">-- Choose Role --</option>
+          <option value="user">User</option>
+          <option value="driver">Driver</option>
+        </select>
+      </div>
+
+      <div id="vehicle-id-container" class="input-group">
+        <label for="vehicle_id">Vehicle ID (for Driver only)</label>
+        <input type="text" name="vehicle_id" id="vehicle_id" />
+      </div>
+
+      <button type="submit">Register</button>
+    </form>
+
+    <div class="login-link">
+      Already registered? <a href="/login">Login here</a>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('roleSelect').addEventListener('change', function () {
+      const container = document.getElementById('vehicle-id-container');
+      container.style.display = this.value === 'driver' ? 'block' : 'none';
+    });
+  </script>
+
+</body>
+</html>

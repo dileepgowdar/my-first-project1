@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Welcome to Bus/Taxi Tracking System</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: url("https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=1350&q=80") no-repeat center center/cover;
+      height: 100vh;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      color: white;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 3.5rem;
+      color: white;
+      background: linear-gradient(90deg, #00ffe2, #66ccff);
+      padding: 10px 20px;
+      border-radius: 8px;
+      display: inline-block;
+    }
+
+    p {
+      font-size: 1.3rem;
+      margin: 20px 0 40px;
+      color: rgba(255, 255, 255, 0.85);
+      animation: fadeInUp 2s ease, pulse 3s infinite ease-in-out;
+    }
+
+    .btn {
+      padding: 14px 28px;
+      font-size: 16px;
+      background: #00bcd4;
+      border: none;
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+      transition: background 0.3s, transform 0.3s;
+      text-decoration: none;
+      animation: fadeInUp 2.5s ease;
+    }
+
+    .btn:hover {
+      background: #0195a3;
+      transform: scale(1.05);
+    }
+
+    @keyframes fadeInDown {
+      from { opacity: 0; transform: translateY(-40px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(40px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes glow {
+      from {
+        text-shadow: 0 0 10px #00ffe2, 0 0 20px #00bcd4;
+      }
+      to {
+        text-shadow: 0 0 20px #00ffe2, 0 0 30px #00bcd4;
+      }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.9; }
+      50% { opacity: 1; transform: scale(1.02); }
+    }
+
+    .admin-link {
+      position: absolute;
+      bottom: 15px;
+      right: 20px;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .admin-link a {
+      color: #00ffe2;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .admin-link a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Welcome to Bus/Taxi Tracking System</h1>
+  <p>Your smart and efficient vehicle tracking experience starts here</p>
+  <a href="/login" class="btn">🚀 Get Started</a>
+
+  <div class="admin-link">
+    Admin? <a href="/admin_register?key=secure123">Register here</a>
+  </div>
+
+</body>
+</html>

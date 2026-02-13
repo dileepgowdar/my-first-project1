@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Registration</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #1f4037, #99f2c8);
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .register-box {
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+      width: 350px;
+      text-align: center;
+      animation: slideIn 1s ease-out;
+    }
+    @keyframes slideIn {
+      from { transform: translateY(-50px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    h2 {
+      margin-bottom: 20px;
+      color: #2c3e50;
+    }
+    input, button {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      font-size: 16px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      outline: none;
+    }
+    input:focus {
+      border-color: #28a745;
+      box-shadow: 0 0 5px rgba(40, 167, 69, 0.4);
+    }
+    button {
+      background: #28a745;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.3s;
+      border: none;
+    }
+    button:hover {
+      background: #218838;
+    }
+    .link {
+      margin-top: 10px;
+      font-size: 14px;
+    }
+    .link a {
+      color: #007bff;
+      text-decoration: none;
+    }
+    .link a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="register-box">
+    <h2>Admin Registration</h2>
+    <form action="/admin_register?key=secure123" method="POST">
+      <input type="text" name="username" placeholder="Admin Username" required />
+      <input type="password" name="password" placeholder="Admin Password" required />
+      <button type="submit">Register Admin</button>
+    </form>
+    <div class="link">
+      <p>Already registered? <a href="/login">Go to Login</a></p>
+    </div>
+  </div>
+
+</body>
+</html>

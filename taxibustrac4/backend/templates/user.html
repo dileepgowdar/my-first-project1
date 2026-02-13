@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Book a Taxi</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #f0f2f5, #e9ecef);
+    }
+
+    .booking-form {
+      background: white;
+      padding: 30px;
+      margin: 30px auto;
+      width: 90%;
+      max-width: 450px;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+      transition: 0.3s;
+    }
+
+    .booking-form:hover {
+      transform: translateY(-5px);
+    }
+
+    h2 {
+      text-align: center;
+      color: #007bff;
+      margin-bottom: 20px;
+    }
+
+    input, button {
+      width: 100%;
+      padding: 12px 15px;
+      margin: 12px 0;
+      font-size: 16px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      transition: all 0.3s ease;
+    }
+
+    input:focus {
+      border-color: #007bff;
+      outline: none;
+      box-shadow: 0 0 4px rgba(0, 123, 255, 0.5);
+    }
+
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    .status {
+      text-align: center;
+      margin-top: 10px;
+      font-weight: bold;
+      color: #333;
+    }
+
+    #map {
+      height: 400px;
+      margin: 30px auto;
+      width: 90%;
+      border: 3px solid #007bff;
+      border-radius: 10px;
+    }
+
+    @media screen and (max-width: 500px) {
+      .booking-form {
+        padding: 20px;
+        margin: 20px 10px;
+      }
+
+      #map {
+        width: 95%;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="booking-form">
+  <h2>🚖 Book a Taxi</h2>
+  <input type="text" id="username" placeholder="Your Username" value="{{ username }}" required>
+  <input type="text" id="pickup" placeholder="Pickup Location (e.g., Majestic)" required>
+  <input type="text" id="drop" placeholder="Drop Location (e.g., Electronic City)" required>
+
+  <button onclick="estimateFare()">Estimate Fare</button>
+  <button onclick="bookTaxi()">Book Now</button>
+  <button onclick="cancelBooking()">Cancel Booking</button>
+
+  <div class="status" id="fareEstimate"></div>
+  <div class="status" id="statusMsg"></div>
+</div>
+
+<div id="map"></div>
+
+<script>
+  let vehicleStarted = false;
+  let pickupAcknowledged = false;
+  let map = L.map('map').setView([12.97, 77.59], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+  let driverMarker = null, pickupMarker = null, dropMarker = null;
+
+  async function estimateFare() {
+    const pickup = document.getElementById("pickup").value;
+    const drop = document.getElementById("drop").value;
+    const res = await fetch(`/estimate_fare?pickup=${pickup}&drop=${drop}`);
+    const data = await res.json();
+    document.getElementById("fareEstimate").innerText = `💰 Estimated Fare: ₹${data.fare}`;
+  }
+
+  async function bookTaxi() {
+    const username = document.getElementById("username").value;
+    const pickup = document.getElementById("pickup").value;
+    const drop = document.getElementById("drop").value;
+    const statusMsg = document.getElementById("statusMsg");
+    const fareBox = document.getElementById("fareEstimate");
+    fareBox.innerText = "Estimating fare...";
+    const estimateRes = await fetch(`/estimate_fare?pickup=${pickup}&drop=${drop}`);
+    const fareData = await estimateRes.json();
+    fareBox.innerText = `💰 Estimated Fare: ₹${fareData.fare}`;
+    statusMsg.innerText = "📦 Booking in progress...";
+
+    const res = await fetch("/book_taxi_auto", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, pickup, drop })
+    });
+
+    const result = await res.json();
+    if (result.success) {
+      statusMsg.innerHTML = `✅ Taxi Booked Successfully!<br>🚖 Vehicle: <strong>${result.vehicle_id}</strong><br>ETA: ${result.eta} min`;
+    } else {
+      statusMsg.innerText = "❌ Booking failed: " + result.error;
+    }
+  }
+
+  async function cancelBooking() {
+    const username = document.getElementById("username").value;
+    const res = await fetch(`/cancel_booking/${username}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+    const data = await res.json();
+    document.getElementById("statusMsg").innerText = data.message;
+    document.getElementById("fareEstimate").innerText = "";
+    clearMapMarkers();
+    vehicleStarted = false;
+    pickupAcknowledged = false;
+  }
+
+  function clearMapMarkers() {
+    if (driverMarker) map.removeLayer(driverMarker);
+    if (pickupMarker) map.removeLayer(pickupMarker);
+    if (dropMarker) map.removeLayer(dropMarker);
+  }
+
+  async function pollVehicleStatus() {
+    const username = document.getElementById("username").value;
+    if (!username) return;
+
+    const bookingRes = await fetch(`/get_user_booking/${username}`);
+    const booking = await bookingRes.json();
+    const statusMsg = document.getElementById("statusMsg");
+
+    if (!booking.vehicle_id) {
+      if (pickupAcknowledged || vehicleStarted) {
+        statusMsg.innerText = "❌ Ride rejected by the driver. Please try booking again.";
+      } else {
+        statusMsg.innerText = "📥 Awaiting booking...";
+      }
+      document.getElementById("fareEstimate").innerText = "";
+      clearMapMarkers();
+      vehicleStarted = false;
+      pickupAcknowledged = false;
+      return;
+    }
+
+    const vehicleId = booking.vehicle_id;
+    const locationRes = await fetch(`/get_location/${vehicleId}`);
+    const info = await locationRes.json();
+    const latlng = [info.latitude, info.longitude];
+
+    if (driverMarker) driverMarker.setLatLng(latlng);
+    else driverMarker = L.marker(latlng, { title: "Driver" }).addTo(map);
+
+    if (!pickupAcknowledged && info.ride_accepted && info.at_pickup) {
+      pickupAcknowledged = true;
+      const confirmStart = confirm(`🚖 Driver has arrived!\nETA: ${info.eta_minutes} min\nStart ride?`);
+      if (confirmStart) {
+        await fetch("/confirm_pickup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ vehicle_id: vehicleId })
+        });
+        vehicleStarted = true;
+        document.querySelector("button[onclick='cancelBooking()']").disabled = true;
+      }
+    }
+
+    if (vehicleStarted) {
+      statusMsg.innerHTML = `🚗 Driver moving to destination<br>ETA: ${info.eta_minutes} min<br>Distance: ${info.distance_km} km`;
+      if (info.arrived && info.at_drop && !window.arrivalAlertShown) {
+        window.arrivalAlertShown = true;
+        alert("✅ You have arrived at your destination!");
+      }
+    } else {
+      statusMsg.innerHTML = `🚕 Driver arriving to pickup<br>ETA: ${info.eta_minutes} min<br>Distance: ${info.distance_km} km`;
+    }
+
+    const bookingInfo = await fetch(`/get_booking_info/${vehicleId}`).then(res => res.json());
+    if (bookingInfo.pickup && (!pickupMarker || !dropMarker)) {
+      if (pickupMarker) map.removeLayer(pickupMarker);
+      if (dropMarker) map.removeLayer(dropMarker);
+
+      pickupMarker = L.marker([bookingInfo.pickup.lat, bookingInfo.pickup.lng], {
+        icon: L.icon({ iconUrl: "https://maps.google.com/mapfiles/ms/icons/green-dot.png", iconSize: [25, 41], iconAnchor: [12, 41] })
+      }).addTo(map).bindPopup("Pickup Point");
+
+      dropMarker = L.marker([bookingInfo.drop.lat, bookingInfo.drop.lng], {
+        icon: L.icon({ iconUrl: "https://maps.google.com/mapfiles/ms/icons/red-dot.png", iconSize: [25, 41], iconAnchor: [12, 41] })
+      }).addTo(map).bindPopup("Drop Point");
+    }
+  }
+
+  setInterval(pollVehicleStatus, 5000);
+</script>
+</body>
+</html>
